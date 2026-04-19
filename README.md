@@ -21,5 +21,7 @@ Bu depo, SixPack30 mobil uygulamasının sadece backend (sunucu tarafı) kodlar�
    ```
 4. Uygulamayı başlatın:
    ```bash
-   npm run dev
-   ```
+## Geliştirici Ekip
+Bu proje Bir Takım Yazılım tarafından Flyworkteam adına geliştirilmiştir.
+
+**Ece Uzel & Mert Uzel** - Bir Takım Yazılım Kurucuları
