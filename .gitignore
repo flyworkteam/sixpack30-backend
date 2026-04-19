@@ -1,0 +1,14 @@
+node_modules
+# Keep environment variables out of version control
+.env
+
+.DS_Store
+._*
+/generated/prisma
+
+# Firebase Service Account key — specifically ignore this
+sixpack30-f3484-cbf89df3e6b3.json
+
+# If you have other JSON files you want to ignore, add them here.
+# Otherwise, package.json etc. will be included.
+

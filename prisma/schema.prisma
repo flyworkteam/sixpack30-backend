@@ -1,0 +1,116 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                   Int               @id @default(autoincrement())
+  firebaseUid          String            @unique
+  email                String?
+  name                 String?
+  isPremium            Boolean           @default(false)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  waterIntake          Float             @default(0)
+  healthConnected      Boolean           @default(false)
+  notificationsEnabled Boolean           @default(true)
+  photoUrl             String?
+  questionnaires       Questionnaire[]
+  progresses           Progress[]
+  completedProgramDays CompletedDay[]
+  notifications        Notification[]
+  dailyActivities      DailyActivity[]
+}
+
+model CompletedDay {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  dayNumber   Int
+  completedAt DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, dayNumber])
+}
+
+model DailyActivity {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  date         DateTime @default(now())
+  steps        Int      @default(0)
+  calories     Float    @default(0)
+  sleepMinutes Int      @default(0)
+  weight       Float?
+  user         User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, date])
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  title     String
+  body      String
+  type      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId], map: "Notification_userId_fkey")
+}
+
+model Questionnaire {
+  id               Int      @id @default(autoincrement())
+  userId           Int
+  weight           Float?
+  height           Float?
+  goal             String?
+  gender           String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  activityLevel    Int?
+  birthYear        Int?
+  bodyType         Float?
+  experience       Int?
+  speed            Int?
+  targetBodyType   Float?
+  targetWeight     Float?
+  trainingDays     String?
+  trainingDuration Int?
+  trainingType     Int?
+  user             User     @relation(fields: [userId], references: [id])
+
+  @@index([userId], map: "Questionnaire_userId_fkey")
+}
+
+model Exercise {
+  id             Int        @id @default(autoincrement())
+  title_tr       String
+  title_en       String?
+  description_tr String?
+  description_en String?
+  duration       Int
+  imagePath   String?
+  difficulty  String?
+  isPremium   Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  progresses  Progress[]
+}
+
+model Progress {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  exerciseId  Int
+  duration    Int
+  calories    Float?
+  completedAt DateTime @default(now())
+  exercise    Exercise @relation(fields: [exerciseId], references: [id])
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([exerciseId], map: "Progress_exerciseId_fkey")
+  @@index([userId], map: "Progress_userId_fkey")
+}
