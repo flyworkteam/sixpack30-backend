@@ -1,15 +1,13 @@
-import type { Request, Response } from 'express';
-import prisma from '../config/database';
-import { createNotification } from '../services/notification.service';
+import prisma from '../config/database.js';
+import { createNotification } from '../services/notification.service.js';
 
 /**
  * RevenueCat Webhook Handler
  * @route POST /api/webhooks/revenuecat
  */
-export const handleRevenueCatWebhook = async (req: Request, res: Response) => {
+export const handleRevenueCatWebhook = async (req, res) => {
   const { event } = req.body;
 
-  // Güvenlik kontrolü (.env dosyasındaki token ile karşılaştırma)
   const authToken = req.headers['authorization'];
   if (authToken !== process.env.REVENUECAT_WEBHOOK_AUTH_TOKEN) {
     return res.status(401).json({ error: 'Yetkisiz webhook isteği.' });
@@ -22,7 +20,6 @@ export const handleRevenueCatWebhook = async (req: Request, res: Response) => {
   const { type, app_user_id } = event;
 
   try {
-    // app_user_id genelde Firebase UID'dir (Mobil tarafta set ettiğimiz id)
     const user = await prisma.user.findUnique({
       where: { firebaseUid: app_user_id },
     });
@@ -50,17 +47,14 @@ export const handleRevenueCatWebhook = async (req: Request, res: Response) => {
         break;
 
       default:
-        // Diğer olaylar durum değişimine gerek duymayabilir
         return res.status(200).json({ message: 'Olay işlendi (durum değişmedi).' });
     }
 
-    // Veritabanını güncelle
     await prisma.user.update({
       where: { id: user.id },
       data: { isPremium },
     });
 
-    // BİLDİRİM GÖNDER
     if (isPremium) {
       await createNotification(
         user.id,

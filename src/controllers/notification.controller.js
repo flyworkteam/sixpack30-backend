@@ -1,4 +1,3 @@
-import type { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -7,7 +6,7 @@ const prisma = new PrismaClient();
  * Kullanıcının bildirimlerini listeleme
  * @route GET /api/notifications
  */
-export const getNotifications = async (req: Request, res: Response) => {
+export const getNotifications = async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Yetkisiz erişim' });
 
   try {
@@ -33,7 +32,7 @@ export const getNotifications = async (req: Request, res: Response) => {
  * Bildirimi okundu olarak işaretleme
  * @route PUT /api/notifications/:id/read
  */
-export const markAsRead = async (req: Request, res: Response) => {
+export const markAsRead = async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Yetkisiz erişim' });
 
   try {
@@ -53,7 +52,7 @@ export const markAsRead = async (req: Request, res: Response) => {
  * Tüm bildirimleri silme
  * @route DELETE /api/notifications
  */
-export const deleteAllNotifications = async (req: Request, res: Response) => {
+export const deleteAllNotifications = async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Yetkisiz erişim' });
 
   try {

@@ -1,11 +1,9 @@
 import { Router } from 'express';
-import { syncUserAuth, getProfile, updateProfile, getUserStats, updateWaterIntake, syncHealthData } from '../controllers/user.controller';
-import { verifyToken } from '../middlewares/auth.middleware';
+import { syncUserAuth, getProfile, updateProfile, getUserStats, updateWaterIntake, syncHealthData } from '../controllers/user.controller.js';
+import { verifyToken } from '../middlewares/auth.middleware.js';
 
 const router = Router();
 
-// Tüm rotaları yetki koruması (VerifyToken) altına alıyoruz.
-// Kullanıcının mutlaka geçerli bir Firebase Token ile gelmesi gerekiyor.
 router.use(verifyToken);
 
 router.post('/auth', syncUserAuth);

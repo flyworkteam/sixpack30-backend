@@ -1,16 +1,12 @@
-import type { Request, Response } from 'express';
-import prisma from '../config/database';
-import { createNotification } from '../services/notification.service';
-import { getCdnUrl } from '../utils/cdn';
-import { getLang, localizeExercise } from '../utils/lang';
+import prisma from '../config/database.js';
+import { createNotification } from '../services/notification.service.js';
+import { getCdnUrl } from '../utils/cdn.js';
+import { getLang, localizeExercise } from '../utils/lang.js';
 
 /**
- * Kullanıcı Firebase ile frontend'den giriş yaptıktan sonra veya
- * yeni kayıt olduktan sonra çalışacak ana "Login / Auth Sync" metodu.
  * @route POST /api/user/auth
  */
-export const syncUserAuth = async (req: Request, res: Response) => {
-  // `req.user` bizim Firebase auth.middleware.ts tarafından doğrulanıp dolduruldu
+export const syncUserAuth = async (req, res) => {
   if (!req.user) {
     return res.status(401).json({ error: 'Yetkilendirme yapılamadı.' });
   }
@@ -18,8 +14,6 @@ export const syncUserAuth = async (req: Request, res: Response) => {
   const { uid, email, name, picture } = req.user;
 
   try {
-    // Kullanıcı MySQL sistemimizde var mı?
-    // Ayrıca "upsert" kullanarak varsa çek, yoksa oluştur mantığını kuruyoruz.
     const user = await prisma.user.upsert({
       where: { firebaseUid: uid },
       update: {}, 
@@ -31,11 +25,9 @@ export const syncUserAuth = async (req: Request, res: Response) => {
       },
     });
 
-    // [TEŞHİS LOGU] Giriş denemesi detayları
     console.log('******************************************');
     console.log(`>>> GİRİŞ DENEMESİ: ${email} (UID: ${uid})`);
     
-    // Anket durumunu kesin olarak kontrol edelim
     const questionnaireCount = await prisma.questionnaire.count({
       where: { userId: user.id }
     });
@@ -51,22 +43,20 @@ export const syncUserAuth = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Kullanıcı sync hatası [FULL ERROR]:', JSON.stringify(error, null, 2));
-    console.error(error); // Ayrıca ham error da yazdırılsın
     res.status(500).json({ error: 'Sunucu hatası oluştu.' });
   }
 };
 
 /**
- * Kullanıcının profil bilgilerini getirme
  * @route GET /api/user/profile
  */
-export const getProfile = async (req: Request, res: Response) => {
+export const getProfile = async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Yetkisiz erişim' });
 
   try {
     const user = await prisma.user.findUnique({
       where: { firebaseUid: req.user.uid },
-      include: { questionnaires: true }, // Varsa anket verilerini de getir
+      include: { questionnaires: true },
     });
 
     if (!user) {
@@ -80,10 +70,9 @@ export const getProfile = async (req: Request, res: Response) => {
 };
 
 /**
- * Kullanıcı profil bilgilerini / anketini güncelleme
  * @route PUT /api/user/profile
  */
-export const updateProfile = async (req: Request, res: Response) => {
+export const updateProfile = async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Yetkisiz erişim' });
 
   const { name, photoUrl, height, weight, goal, gender, birthYear, targetWeight, bodyType, targetBodyType, speed, experience, trainingType, activityLevel, trainingDays, trainingDuration, notificationsEnabled, healthConnected } = req.body;
@@ -92,12 +81,10 @@ export const updateProfile = async (req: Request, res: Response) => {
     const user = await prisma.user.findUnique({ where: { firebaseUid: req.user.uid } });
     if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
 
-    // [TEŞHİS LOGU] Profil güncelleme denemesi
     console.log('******************************************');
     console.log(`>>> PROFIL GÜNCELLEME: ${user.email} (ID: ${user.id})`);
     console.log('>>> GELEN VERİ:', JSON.stringify(req.body, null, 2));
 
-    // Temel kullanıcı bilgilerini güncelle
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -111,9 +98,7 @@ export const updateProfile = async (req: Request, res: Response) => {
     console.log(`>>> GÜNCELLEME BAŞARILI: Yeni İsim = ${updatedUser.name}`);
     console.log('******************************************');
 
-    // Eğer anket bilgileri de gönderilmişse Questionnaire tablosuna ekle/güncelle
     if (height || weight || goal || gender || birthYear || targetWeight || bodyType || targetBodyType || speed || experience || trainingType || activityLevel || trainingDays || trainingDuration) {
-      // Önce mevcut anket var mı kontrol edelim
       const existingQuestionnaire = await prisma.questionnaire.findFirst({
         where: { userId: user.id },
       });
@@ -148,7 +133,6 @@ export const updateProfile = async (req: Request, res: Response) => {
           },
         });
 
-        // BİLDİRİM GÖNDER (İlk anket tamamlandığında)
         await createNotification(
           user.id,
           'Anket Tamamlandı! 🎉',
@@ -166,10 +150,9 @@ export const updateProfile = async (req: Request, res: Response) => {
 };
 
 /**
- * Kullanıcı istatistiklerini getirme (Gerçek + Simüle edilmiş sağlık verileri)
  * @route GET /api/user/stats
  */
-export const getUserStats = async (req: Request, res: Response) => {
+export const getUserStats = async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Yetkisiz erişim' });
 
   try {
@@ -187,13 +170,11 @@ export const getUserStats = async (req: Request, res: Response) => {
 
     if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
 
-    // GERÇEK VERİLER (Veritabanından)
     const lang = getLang(req);
     const completedDays = user.completedProgramDays
       .map(cd => cd.dayNumber)
       .sort((a, b) => a - b);
 
-    // 1. Seriyi (Streak) hesapla (Takvim tarihlerine göre ardışık günleri say)
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
     const yesterday = new Date(now);
@@ -205,7 +186,6 @@ export const getUserStats = async (req: Request, res: Response) => {
     );
 
     let streak = 0;
-    // Eğer bugün veya dün antrenman yapılmışsa seriyi kontrol et
     if (completedDatesSet.has(todayStr) || completedDatesSet.has(yesterdayStr)) {
       let checkDate = new Date(completedDatesSet.has(todayStr) ? now : yesterday);
       while (completedDatesSet.has(checkDate.toISOString().split('T')[0])) {
@@ -214,18 +194,15 @@ export const getUserStats = async (req: Request, res: Response) => {
       }
     }
 
-    // 2. Toplam Süreyi (Dakika) ve Hareket Sayısını hesapla
     const totalDurationSec = user.progresses.reduce((sum, p) => sum + p.duration, 0);
     const totalDurationMin = Math.round(totalDurationSec / 60);
-    const totalMoves = user.progresses.length * 8; // Ortalama her antrenman 8 hareket varsayımı
+    const totalMoves = user.progresses.length * 8;
 
-    // 3. Tamamlama Oranı (30 günlük program varsayımıyla)
     const totalActivity = user.progresses.length;
     const completionRate = Math.min(Math.round((totalActivity / 30) * 100), 100);
 
-    // SON AKTİVİTELER (Kaldığın yerden devam et için - Sadece yarım kalmışları al)
     const recentExercises = user.progresses
-      .filter(p => p.duration < p.exercise.duration) // Sadece süresi tamamlanmamış olanlar
+      .filter(p => p.duration < p.exercise.duration)
       .slice(0, 5)
       .map(p => {
         const localizedEx = localizeExercise(p.exercise, lang);
@@ -240,23 +217,19 @@ export const getUserStats = async (req: Request, res: Response) => {
         };
       });
 
-    // --- Karın Odaklı Dinamik Hesaplama ---
     const latestQuestionnaire = user.questionnaires[0] || null;
     const initialWeight = latestQuestionnaire?.weight || 70;
     const targetWeight = latestQuestionnaire?.targetWeight || 65;
     
-    // 1. Kilo Kaybı: Toplam yakılan kaloriye dayalı (7700 kcal = 1kg) + Metabolik baz (günlük 0.05kg)
     const caloriesBurned = user.progresses.reduce((sum, p) => sum + (p.calories || 0), 0);
     const daysSinceCreation = Math.floor((now.getTime() - user.createdAt.getTime()) / (1000 * 60 * 60 * 24));
     
-    // Antrenmanlardan gelen kilo kaybı + zamanla gelen hafif metabolik etki
     const weightLossFromWorkouts = caloriesBurned / 7700;
     const weightLossFromTime = daysSinceCreation * 0.05;
     const totalWeightLoss = Math.min(weightLossFromWorkouts + weightLossFromTime, Math.max(0, initialWeight - targetWeight));
     
     const currentWeight = initialWeight - totalWeightLoss;
 
-    // 2. Yağ Oranı: Kilo kaybına paralel düşüş (Her 1kg kayıp yağ oranını yaklaşık %0.5 düşürür diye varsayalım)
     let initialFatRate = 24;
     if (latestQuestionnaire?.bodyType) {
       initialFatRate = Math.round(latestQuestionnaire.bodyType * 10) + 15;
@@ -264,11 +237,9 @@ export const getUserStats = async (req: Request, res: Response) => {
       initialFatRate = 30;
     }
     const fatRateReduction = totalWeightLoss * 0.5;
-    const currentFatRate = Math.max(8, initialFatRate - fatRateReduction); // Minimum %8'e kadar düşer
+    const currentFatRate = Math.max(8, initialFatRate - fatRateReduction);
 
-    // 3. Kas Kütlesi (Karın Odaklı): Tamamlanan aktivite sayısına göre artış
-    // Her antrenman kas kütlesine yaklaşık 0.1kg reel katkı sağlar (simülasyon)
-    const initialMuscleMass = currentWeight * 0.4; // Başlangıçta %40 kas
+    const initialMuscleMass = currentWeight * 0.4;
     const muscleMassIncrease = totalActivity * 0.1;
     const currentMuscleMass = initialMuscleMass + muscleMassIncrease;
 
@@ -302,10 +273,9 @@ export const getUserStats = async (req: Request, res: Response) => {
 };
 
 /**
- * Kullanıcı su tüketimini güncelleme
  * @route PUT /api/user/stats/water
  */
-export const updateWaterIntake = async (req: Request, res: Response) => {
+export const updateWaterIntake = async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Yetkisiz erişim' });
 
   const { amount } = req.body;
@@ -338,10 +308,9 @@ export const updateWaterIntake = async (req: Request, res: Response) => {
   }
 };
 /**
- * Sağlık verilerini (Adım, Kalori, Uyku) senkronize etme
  * @route POST /api/user/sync-health
  */
-export const syncHealthData = async (req: Request, res: Response) => {
+export const syncHealthData = async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Yetkisiz erişim' });
 
   const { steps, calories, sleepMinutes, weight } = req.body;

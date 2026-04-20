@@ -5,10 +5,8 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// JSON dosyasının yolunu belirliyoruz (backend klasörünün kök dizininde yer alıyor)
 const serviceAccountPath = path.resolve(__dirname, '../../sixpack30-f3484-cbf89df3e6b3.json');
 
-// Firebase uygulamasını başlatıyoruz
 try {
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccountPath)

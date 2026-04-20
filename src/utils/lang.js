@@ -1,11 +1,9 @@
-import type { Request } from 'express';
-
-export const getLang = (req: Request) => {
-  const lang = (req.headers['accept-language'] as string) || 'tr';
+export const getLang = (req) => {
+  const lang = req.headers['accept-language'] || 'tr';
   return lang.toLowerCase().startsWith('en') ? 'en' : 'tr';
 };
 
-export const localizeExercise = (exercise: any, lang: string) => {
+export const localizeExercise = (exercise, lang) => {
   return {
     ...exercise,
     title: lang === 'en' ? (exercise.title_en || exercise.title_tr) : exercise.title_tr,

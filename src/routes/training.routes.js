@@ -1,10 +1,9 @@
 import { Router } from 'express';
-import { saveProgress, completeDay } from '../controllers/training.controller';
-import { verifyToken } from '../middlewares/auth.middleware';
+import { saveProgress, completeDay } from '../controllers/training.controller.js';
+import { verifyToken } from '../middlewares/auth.middleware.js';
 
 const router = Router();
 
-// İlerleme kaydetmek için de token şart
 router.use(verifyToken);
 
 router.post('/progress', saveProgress);

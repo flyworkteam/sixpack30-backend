@@ -3,23 +3,11 @@
  *
  * Bu servis, OneSignal REST API üzerinden push bildirimi göndermek için
  * kullanılan merkezi ve yeniden kullanılabilir fonksiyonları içerir.
- *
- * Kullanım:
- *   import { sendToUser, sendToAll } from '../services/onesignal.service';
  */
 
-const ONESIGNAL_APP_ID = process.env.ONESIGNAL_APP_ID!;
-const ONESIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY!;
+const ONESIGNAL_APP_ID = process.env.ONESIGNAL_APP_ID;
+const ONESIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY;
 const ONESIGNAL_API_URL = 'https://onesignal.com/api/v1/notifications';
-
-interface NotificationPayload {
-  app_id: string;
-  headings: { en: string; tr: string };
-  contents: { en: string; tr: string };
-  include_aliases?: { external_id: string[] };
-  include_subscribed_segments?: string[];
-  target_channel: string;
-}
 
 /**
  * Belirli bir kullanıcıya push bildirimi gönderir.
@@ -29,11 +17,11 @@ interface NotificationPayload {
  * @param body - Bildirim içeriği
  */
 export const sendToUser = async (
-  firebaseUid: string,
-  title: string,
-  body: string
-): Promise<void> => {
-  const payload: NotificationPayload = {
+  firebaseUid,
+  title,
+  body
+) => {
+  const payload = {
     app_id: ONESIGNAL_APP_ID,
     target_channel: 'push',
     headings: { en: title, tr: title },
@@ -72,8 +60,8 @@ export const sendToUser = async (
  * @param title - Bildirim başlığı
  * @param body - Bildirim içeriği
  */
-export const sendToAll = async (title: string, body: string): Promise<void> => {
-  const payload: NotificationPayload = {
+export const sendToAll = async (title, body) => {
+  const payload = {
     app_id: ONESIGNAL_APP_ID,
     target_channel: 'push',
     headings: { en: title, tr: title },

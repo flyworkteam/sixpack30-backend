@@ -1,12 +1,9 @@
-import type { Request, Response } from 'express';
-import prisma from '../config/database';
+import prisma from '../config/database.js';
 
 /**
- * Kullanıcının tamamladığı antrenmanı ve yaktığı kaloriyi sisteme işler.
  * @route POST /api/training/progress
  */
-export const saveProgress = async (req: Request, res: Response) => {
-  // req.user kesinlikle var (middleware sayesinde)
+export const saveProgress = async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Yetkisiz erişim' });
   
   const { exerciseId, duration, calories } = req.body;
@@ -16,7 +13,6 @@ export const saveProgress = async (req: Request, res: Response) => {
   }
 
   try {
-    // Önce Kullanıcının MySQL'deki ID'sini bulalım
     const user = await prisma.user.findUnique({
       where: { firebaseUid: req.user.uid },
     });
@@ -25,7 +21,6 @@ export const saveProgress = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Karanlık sistem hatası: Kullanıcı backendde eşlenmemiş.' });
     }
 
-    // Egzersizin de geçerli olup olmadığını kontrol edelim
     const exercise = await prisma.exercise.findUnique({
       where: { id: exerciseId },
     });
@@ -34,7 +29,6 @@ export const saveProgress = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Tamamlanan egzersiz veritabanında bulunamadı.' });
     }
 
-    // Progress (İlerleme) kaydını oluşturuyoruz
     const newProgress = await prisma.progress.create({
       data: {
         userId: user.id,
@@ -55,10 +49,9 @@ export const saveProgress = async (req: Request, res: Response) => {
 };
 
 /**
- * Kullanıcının belirli bir program gününü (1-30) tamamladığını kaydeder.
  * @route POST /api/training/complete-day
  */
-export const completeDay = async (req: Request, res: Response) => {
+export const completeDay = async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Yetkisiz erişim' });
   
   const { dayNumber } = req.body;
@@ -68,7 +61,6 @@ export const completeDay = async (req: Request, res: Response) => {
   }
 
   try {
-    // Prisma nesnesinin ve modelin varlığını kontrol et (Debug için)
     if (!prisma || !prisma.user) {
       console.error('CRITICAL: Prisma client or User model is undefined!');
       return res.status(500).json({ 
@@ -85,7 +77,6 @@ export const completeDay = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
     }
 
-    // Zaten tamamlanmış mı kontrol et (Opsiyonel: tekrar kaydetmek hata vermesin)
     const existing = await prisma.completedDay.findUnique({
       where: {
         userId_dayNumber: {
@@ -110,7 +101,7 @@ export const completeDay = async (req: Request, res: Response) => {
       message: 'Gün başarıyla tamamlandı.',
       completedDay,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('completeDay hatası:', error);
     res.status(500).json({ 
       error: 'Gün kaydedilirken sunucu hatası oluştu.',

@@ -4,8 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "ts-node src/index.ts",
-    "dev": "tsx watch src/index.ts"
+    "start": "node src/index.js",
+    "dev": "nodemon",
+    "upload-cdn": "node scripts/upload_to_cdn.js"
   },
   "keywords": [],
   "author": "",
@@ -19,13 +20,7 @@
     "firebase-admin": "^13.8.0"
   },
   "devDependencies": {
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.6",
-    "@types/node": "^25.6.0",
     "nodemon": "^3.1.14",
-    "prisma": "^6.19.3",
-    "ts-node": "^10.9.2",
-    "tsx": "^4.21.0",
-    "typescript": "^6.0.2"
+    "prisma": "^6.19.3"
   }
 }

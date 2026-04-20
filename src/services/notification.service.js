@@ -1,18 +1,15 @@
-import prisma from '../config/database';
-import { sendToUser } from './onesignal.service';
+import prisma from '../config/database.js';
+import { sendToUser } from './onesignal.service.js';
 
 /**
- * Merkezi Bildirim Servisi
- * Hem veritabanına (MySQL) kaydeder hem de OneSignal üzerinden Push gönderir.
  */
 export const createNotification = async (
-  userId: number,
-  title: string,
-  body: string,
-  type: string = 'info'
+  userId,
+  title,
+  body,
+  type = 'info'
 ) => {
   try {
-    // 1. Veritabanına kaydet (Kullanıcının bildirim listesinde görünmesi için)
     const notification = await prisma.notification.create({
       data: {
         userId,
@@ -23,8 +20,6 @@ export const createNotification = async (
       },
     });
 
-    // 2. OneSignal üzerinden Push gönder
-    // Kullanıcının firebaseUid bilgisini almamız gerekiyor (OneSignal External ID eşleşmesi için)
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { firebaseUid: true }

@@ -11,7 +11,6 @@ async function main() {
     console.log(`Kullanıcı ID ${userId} için 3 günlük antrenman verisi işleniyor...`);
 
     for (const day of daysToComplete) {
-      // 1. CompletedDay kaydı (Günlük program takibi için)
       await prisma.completedDay.upsert({
         where: {
           userId_dayNumber: {
@@ -23,16 +22,14 @@ async function main() {
         create: {
           userId: userId,
           dayNumber: day,
-          completedAt: new Date(new Date().setDate(new Date().getDate() - (3 - day))) // Geçmişe dönük tarihler
+          completedAt: new Date(new Date().setDate(new Date().getDate() - (3 - day)))
         },
       });
 
-      // 2. Progress kaydı (Detaylı aktivite ve kalori için)
-      // Varsayılan olarak her gün için 10 dakikalık (600 saniye) ve 250 kalorilik aktivite ekleyelim
       await prisma.progress.create({
         data: {
           userId: userId,
-          exerciseId: day, // Her günün kendi egzersiz ID'si (seed dosyasında böyle)
+          exerciseId: day,
           duration: 600,
           calories: 250,
           completedAt: new Date(new Date().setDate(new Date().getDate() - (3 - day)))
