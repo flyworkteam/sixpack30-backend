@@ -16,7 +16,10 @@ export const syncUserAuth = async (req, res) => {
   try {
     const user = await prisma.user.upsert({
       where: { firebaseUid: uid },
-      update: {}, 
+      update: {
+        name: name || undefined,
+        photoUrl: picture || undefined,
+      }, 
       create: {
         firebaseUid: uid,
         email: email || undefined,
@@ -135,7 +138,7 @@ export const updateProfile = async (req, res) => {
 
         await createNotification(
           user.id,
-          'Anket Tamamlandı! 🎉',
+          'Artık Hazırsın! 🚀',
           'Bilgilerin başarıyla alındı. 30 günlük karın kası yolculuğuna başlamaya hazırsın!',
           'success'
         );
