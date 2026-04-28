@@ -1,0 +1,17 @@
+node_modules
+# Keep environment variables out of version control
+.env
+
+/generated/prisma
+
+# Metadata and Junk files
+.DS_Store
+._*
+Desktop.ini
+Thumbs.db
+
+# Firebase Service Account key — asla repoya yükleme!
+# Spesifik anahtar dosyalarını yoksay ama package.json gibi önemli dosyaları koru
+sixpack30-*.json
+*.key
+*.pem
