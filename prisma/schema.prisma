@@ -19,6 +19,12 @@ model User {
   healthConnected      Boolean  @default(false)
   notificationsEnabled Boolean  @default(true)
   photoUrl             String?
+
+  questionnaires       Questionnaire[]
+  notifications        Notification[]
+  progresses           Progress[]
+  dailyActivities      DailyActivity[]
+  completedProgramDays CompletedDay[]
 }
 
 model CompletedDay {
@@ -26,20 +32,9 @@ model CompletedDay {
   userId      Int
   dayNumber   Int
   completedAt DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, dayNumber])
-}
-
-model DailyActivity {
-  id           Int      @id @default(autoincrement())
-  userId       Int
-  date         DateTime @default(now())
-  steps        Int      @default(0)
-  calories     Float    @default(0)
-  sleepMinutes Int      @default(0)
-  weight       Float?
-
-  @@unique([userId, date])
 }
 
 model Notification {
@@ -50,6 +45,7 @@ model Notification {
   type      String?
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId], map: "Notification_userId_fkey")
 }
@@ -73,6 +69,7 @@ model Questionnaire {
   trainingDays     String?
   trainingDuration Int?
   trainingType     Int?
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId], map: "Questionnaire_userId_fkey")
 }
@@ -89,6 +86,7 @@ model Exercise {
   isPremium      Boolean  @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  progresses     Progress[]
 }
 
 model Progress {
@@ -98,7 +96,23 @@ model Progress {
   duration    Int
   calories    Float?
   completedAt DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercise    Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
 
   @@index([exerciseId], map: "Progress_exerciseId_fkey")
   @@index([userId], map: "Progress_userId_fkey")
+}
+
+model DailyActivity {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  date         DateTime @default(now())
+  steps        Int      @default(0)
+  calories     Float    @default(0)
+  sleepMinutes Int      @default(0)
+  weight       Float?
+  heartRate    Float    @default(0)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
 }

@@ -54,50 +54,52 @@ export const saveProgress = async (req, res) => {
 export const completeDay = async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Yetkisiz erişim' });
   
-  const { dayNumber } = req.body;
-
-  if (typeof dayNumber !== 'number') {
-    return res.status(400).json({ error: 'dayNumber zorunludur ve sayı olmalıdır.' });
-  }
+  const { dayNumber, duration, calories } = req.body;
 
   try {
-    if (!prisma || !prisma.user) {
-      console.error('CRITICAL: Prisma client or User model is undefined!');
-      return res.status(500).json({ 
-        error: 'Veritabanı bağlantı hatası.',
-        details: 'Prisma Client correctly initialized but models are missing. Try regenerating prisma client.'
-      });
-    }
+    const user = await prisma.user.findUnique({ where: { firebaseUid: req.user.uid } });
+    if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
 
-    const user = await prisma.user.findUnique({
-      where: { firebaseUid: req.user.uid },
-    });
-
-    if (!user) {
-      return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
-    }
-
-    const existing = await prisma.completedDay.findUnique({
+    // Günün daha önce tamamlanıp tamamlanmadığını kontrol edelim
+    const existingCompletedDay = await prisma.completedDay.findUnique({
       where: {
         userId_dayNumber: {
           userId: user.id,
-          dayNumber: dayNumber,
+          dayNumber: parseInt(dayNumber),
         },
       },
     });
 
-    if (existing) {
-      return res.status(200).json({ message: 'Bu gün zaten tamamlanmış.', alreadyCompleted: true });
-    }
-
-    const completedDay = await prisma.completedDay.create({
-      data: {
+    const completedDay = await prisma.completedDay.upsert({
+      where: {
+        userId_dayNumber: {
+          userId: user.id,
+          dayNumber: parseInt(dayNumber),
+        },
+      },
+      update: {
+        completedAt: new Date(),
+      },
+      create: {
         userId: user.id,
-        dayNumber: dayNumber,
+        dayNumber: parseInt(dayNumber),
       },
     });
 
-    res.status(201).json({
+    // Eğer gün yeni tamamlanıyorsa veya daha önce Progress kaydı girilmediyse 
+    // (İstatistiklerin doğru hesaplanması için bir Progress kaydı oluşturalım)
+    if (!existingCompletedDay && duration && calories) {
+      await prisma.progress.create({
+        data: {
+          userId: user.id,
+          exerciseId: 1, // Varsayılan "Genel Antrenman" ID'si
+          duration: parseInt(duration),
+          calories: parseFloat(calories),
+        },
+      });
+    }
+
+    res.status(200).json({
       message: 'Gün başarıyla tamamlandı.',
       completedDay,
     });

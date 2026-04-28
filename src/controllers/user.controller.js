@@ -14,11 +14,18 @@ export const syncUserAuth = async (req, res) => {
   const { uid, email, name, picture } = req.user;
 
   try {
+    // Mevcut kullanıcıyı bulalım
+    const existingUser = await prisma.user.findUnique({
+      where: { firebaseUid: uid }
+    });
+
     const user = await prisma.user.upsert({
       where: { firebaseUid: uid },
       update: {
-        name: name || undefined,
-        photoUrl: picture || undefined,
+        // Sadece Firebase'de veri varsa ve SQL'deki veri boşsa güncelleyelim 
+        // Veya Firebase'den gelen isim doluysa (kullanıcı Firebase'de ismini değiştirmiş olabilir)
+        name: (name && (!existingUser?.name || existingUser.name === '')) ? name : undefined,
+        photoUrl: (picture && (!existingUser?.photoUrl || existingUser.photoUrl === '')) ? picture : undefined,
       }, 
       create: {
         firebaseUid: uid,
@@ -59,16 +66,20 @@ export const getProfile = async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { firebaseUid: req.user.uid },
-      include: { questionnaires: true },
+      include: { 
+        questionnaires: { take: 1, orderBy: { createdAt: 'desc' } } 
+      },
     });
 
     if (!user) {
+      console.log(`>>> GET PROFILE: Kullanıcı bulunamadı (UID: ${req.user.uid})`);
       return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
     }
 
     res.status(200).json(user);
   } catch (error) {
-    res.status(500).json({ error: 'Profil getirilemedi' });
+    console.error('getProfile [FULL ERROR]:', error);
+    res.status(500).json({ error: 'Profil getirilemedi', details: error.message });
   }
 };
 
@@ -87,6 +98,7 @@ export const updateProfile = async (req, res) => {
     console.log('******************************************');
     console.log(`>>> PROFIL GÜNCELLEME: ${user.email} (ID: ${user.id})`);
     console.log('>>> GELEN VERİ:', JSON.stringify(req.body, null, 2));
+    console.log('******************************************');
 
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
@@ -97,9 +109,6 @@ export const updateProfile = async (req, res) => {
         healthConnected: healthConnected !== undefined ? healthConnected : user.healthConnected,
       },
     });
-
-    console.log(`>>> GÜNCELLEME BAŞARILI: Yeni İsim = ${updatedUser.name}`);
-    console.log('******************************************');
 
     if (height || weight || goal || gender || birthYear || targetWeight || bodyType || targetBodyType || speed || experience || trainingType || activityLevel || trainingDays || trainingDuration) {
       const existingQuestionnaire = await prisma.questionnaire.findFirst({
@@ -145,10 +154,21 @@ export const updateProfile = async (req, res) => {
       }
     }
 
-    res.status(200).json({ message: 'Profil başarıyla güncellendi.', user: updatedUser });
+    // En güncel kullanıcı verisini anketleriyle birlikte alalım
+    const finalUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      include: { 
+        questionnaires: { take: 1, orderBy: { createdAt: 'desc' } } 
+      }
+    });
+
+    console.log(`>>> GÜNCELLEME BAŞARILI: Yeni İsim = ${finalUser.name}`);
+    console.log('******************************************');
+
+    res.status(200).json({ message: 'Profil başarıyla güncellendi.', user: finalUser });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Profil güncellenemedi.' });
+    console.error('updateProfile [FULL ERROR]:', error);
+    res.status(500).json({ error: 'Profil güncellenemedi.', details: error.message });
   }
 };
 
@@ -204,17 +224,18 @@ export const getUserStats = async (req, res) => {
     const totalActivity = user.progresses.length;
     const completionRate = Math.min(Math.round((totalActivity / 30) * 100), 100);
 
+    const gender = user?.questionnaires[0]?.gender || 'male';
     const recentExercises = user.progresses
       .filter(p => p.duration < p.exercise.duration)
       .slice(0, 5)
       .map(p => {
-        const localizedEx = localizeExercise(p.exercise, lang);
+        const localizedEx = localizeExercise(p.exercise, lang, gender);
         const progressRatio = Math.min((p.duration / p.exercise.duration), 1.0);
         return {
           id: p.exercise.id,
           title: localizedEx.title,
           category: p.exercise.difficulty || 'Karın',
-          imagePath: getCdnUrl(p.exercise.imagePath),
+          imagePath: getCdnUrl(localizedEx.imagePath),
           progress: progressRatio,
           progressText: `${Math.round(progressRatio * 100)}%`
         };
@@ -246,6 +267,19 @@ export const getUserStats = async (req, res) => {
     const muscleMassIncrease = totalActivity * 0.1;
     const currentMuscleMass = initialMuscleMass + muscleMassIncrease;
 
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dailyActivity = await prisma.dailyActivity.findUnique({
+      where: { userId_date: { userId: user.id, date: today } }
+    });
+
+    const steps = dailyActivity?.steps || 0;
+    const bpm = Math.round(dailyActivity?.heartRate || 75);
+    const sleepMinutes = dailyActivity?.sleepMinutes || 0;
+    const sleepHours = Math.floor(sleepMinutes / 60);
+    const sleepMins = Math.round(sleepMinutes % 60);
+    const sleepDuration = `${sleepHours} Saat ${sleepMins} Dakika`;
+
     res.status(200).json({
       totalActivity,
       totalKcal: caloriesBurned,
@@ -257,13 +291,13 @@ export const getUserStats = async (req, res) => {
       initialWeight,
       targetWeight,
       weight: parseFloat(currentWeight.toFixed(1)),
-      bpm: 75, 
-      steps: 5420 + (daysSinceCreation * 10),
+      bpm,
+      steps,
       waterIntake: user.waterIntake,
       fatRate: Math.round(currentFatRate),
       initialFatRate,
       initialMuscleMass: parseFloat(initialMuscleMass.toFixed(1)),
-      sleepDuration: "8 Saat", 
+      sleepDuration,
       muscleMass: parseFloat(currentMuscleMass.toFixed(1)),
       completedDays,
       completedAtDates: Array.from(completedDatesSet),
@@ -316,7 +350,7 @@ export const updateWaterIntake = async (req, res) => {
 export const syncHealthData = async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Yetkisiz erişim' });
 
-  const { steps, calories, sleepMinutes, weight } = req.body;
+  const { steps, calories, sleepMinutes, weight, heartRate } = req.body;
 
   try {
     const user = await prisma.user.findUnique({
@@ -340,6 +374,7 @@ export const syncHealthData = async (req, res) => {
         calories: calories !== undefined ? calories : undefined,
         sleepMinutes: sleepMinutes !== undefined ? sleepMinutes : undefined,
         weight: weight !== undefined ? weight : undefined,
+        heartRate: heartRate !== undefined ? heartRate : undefined,
       },
       create: {
         userId: user.id,
@@ -348,15 +383,57 @@ export const syncHealthData = async (req, res) => {
         calories: calories || 0,
         sleepMinutes: sleepMinutes || 0,
         weight: weight,
+        heartRate: heartRate || 0,
       }
     });
 
-    res.status(200).json({
-      message: 'Sağlık verileri başarıyla senkronize edildi.',
-      dailyActivity
-    });
+    res.status(200).json({ message: 'Sağlık verileri güncellendi.', dailyActivity });
   } catch (error) {
     console.error('Health sync error:', error);
     res.status(500).json({ error: 'Sağlık verileri senkronize edilemedi.' });
+  }
+};
+
+export const deleteProfile = async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Yetkisiz erişim' });
+
+  try {
+    const user = await prisma.user.findUnique({ where: { firebaseUid: req.user.uid } });
+    if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+
+    await prisma.user.delete({ where: { id: user.id } });
+
+    res.status(200).json({ message: 'Profil başarıyla silindi.' });
+  } catch (error) {
+    console.error('Delete profile error:', error);
+    res.status(500).json({ error: 'Profil silinemedi.' });
+  }
+};
+
+
+export const updatePremiumStatus = async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Yetkisiz erişim' });
+
+  const { isPremium } = req.body;
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { firebaseUid: req.user.uid }
+    });
+
+    if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+
+    const updatedUser = await prisma.user.update({
+      where: { id: user.id },
+      data: { isPremium: !!isPremium }
+    });
+
+    res.status(200).json({
+      message: 'Premium durumu güncellendi.',
+      isPremium: updatedUser.isPremium
+    });
+  } catch (error) {
+    console.error('Premium update error:', error);
+    res.status(500).json({ error: 'Premium durumu güncellenemedi.' });
   }
 };
