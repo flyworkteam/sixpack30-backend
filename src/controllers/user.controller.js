@@ -274,7 +274,7 @@ export const getUserStats = async (req, res) => {
     });
 
     const steps = dailyActivity?.steps || 0;
-    const bpm = Math.round(dailyActivity?.heartRate || 75);
+    const bpm = Math.round(dailyActivity?.heartRate || 0);
     const sleepMinutes = dailyActivity?.sleepMinutes || 0;
     const sleepHours = Math.floor(sleepMinutes / 60);
     const sleepMins = Math.round(sleepMinutes % 60);
