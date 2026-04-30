@@ -14,7 +14,6 @@ export const syncUserAuth = async (req, res) => {
   const { uid, email, name, picture } = req.user;
 
   try {
-    // Mevcut kullanıcıyı bulalım
     const existingUser = await prisma.user.findUnique({
       where: { firebaseUid: uid }
     });
@@ -22,10 +21,10 @@ export const syncUserAuth = async (req, res) => {
     const user = await prisma.user.upsert({
       where: { firebaseUid: uid },
       update: {
-        // Sadece Firebase'de veri varsa ve SQL'deki veri boşsa güncelleyelim 
-        // Veya Firebase'den gelen isim doluysa (kullanıcı Firebase'de ismini değiştirmiş olabilir)
-        name: (name && (!existingUser?.name || existingUser.name === '')) ? name : undefined,
-        photoUrl: (picture && (!existingUser?.photoUrl || existingUser.photoUrl === '')) ? picture : undefined,
+        name: (name && (!existingUser?.name || existingUser.name === '' || existingUser.name === 'Guest')) ? name : undefined,
+        // Firebase'den fotoğraf gelmişse; SQL'de yoksa VEYA zaten bir google fotoğrafıysa (güncellemek için) güncelleyelim
+        // Eğer kullanıcı özel bir fotoğraf yüklemişse (örn: BunnyCDN), onu ezmeyelim.
+        photoUrl: (picture && (!existingUser?.photoUrl || existingUser.photoUrl === '' || existingUser.photoUrl.includes('googleusercontent.com'))) ? picture : undefined,
       }, 
       create: {
         firebaseUid: uid,
@@ -95,11 +94,6 @@ export const updateProfile = async (req, res) => {
     const user = await prisma.user.findUnique({ where: { firebaseUid: req.user.uid } });
     if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
 
-    console.log('******************************************');
-    console.log(`>>> PROFIL GÜNCELLEME: ${user.email} (ID: ${user.id})`);
-    console.log('>>> GELEN VERİ:', JSON.stringify(req.body, null, 2));
-    console.log('******************************************');
-
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -110,9 +104,13 @@ export const updateProfile = async (req, res) => {
       },
     });
 
+    console.log('>>> KULLANICI GÜNCELLENDİ:', updatedUser.id);
+
     if (height || weight || goal || gender || birthYear || targetWeight || bodyType || targetBodyType || speed || experience || trainingType || activityLevel || trainingDays || trainingDuration) {
+      console.log('>>> ANKET VERİSİ GÜNCELLENİYOR...');
       const existingQuestionnaire = await prisma.questionnaire.findFirst({
         where: { userId: user.id },
+        orderBy: { createdAt: 'desc' },
       });
 
       const questionnaireData = {
@@ -133,11 +131,13 @@ export const updateProfile = async (req, res) => {
       };
 
       if (existingQuestionnaire) {
+        console.log('>>> MEVCUT ANKET GÜNCELLENİYOR ID:', existingQuestionnaire.id);
         await prisma.questionnaire.update({
           where: { id: existingQuestionnaire.id },
           data: questionnaireData,
         });
       } else {
+        console.log('>>> YENİ ANKET OLUŞTURULUYOR...');
         await prisma.questionnaire.create({
           data: {
             userId: user.id,
