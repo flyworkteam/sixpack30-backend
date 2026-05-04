@@ -248,6 +248,9 @@ export const getUserStats = async (req, res) => {
     const caloriesBurned = user.progresses.reduce((sum, p) => sum + (p.calories || 0), 0);
     const daysSinceCreation = Math.floor((now.getTime() - user.createdAt.getTime()) / (1000 * 60 * 60 * 24));
     
+    const weightLossFromWorkouts = caloriesBurned / 7700;
+    const weightLossFromTime = daysSinceCreation * 0.05;
+    
     let maxExpectedLoss = Math.abs(initialWeight - targetWeight);
     if (maxExpectedLoss <= 0) maxExpectedLoss = 15; // Kilo alma veya aynı kalma hedefiyse bile değişim görünsün
     const totalWeightChange = Math.min(weightLossFromWorkouts + weightLossFromTime, maxExpectedLoss);
@@ -261,7 +264,7 @@ export const getUserStats = async (req, res) => {
     } else if (latestQuestionnaire?.gender === 'female') {
       initialFatRate = 30;
     }
-    const fatRateReduction = totalWeightLoss * 0.5;
+    const fatRateReduction = totalWeightChange * 0.5;
     const currentFatRate = Math.max(8, initialFatRate - fatRateReduction);
 
     const initialMuscleMass = currentWeight * 0.4;
