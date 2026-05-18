@@ -7,6 +7,7 @@ import trainingRoutes from './routes/training.routes.js';
 import webhookRoutes from './routes/webhook.routes.js';
 import workoutRoutes from './routes/workout.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
+import panelRoutes from './routes/panel.routes.js';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -25,6 +26,7 @@ app.use('/api/training', trainingRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/workouts', workoutRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/panel', panelRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'SixPack30 Backend API Çalışıyor!' });

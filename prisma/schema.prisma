@@ -75,7 +75,7 @@ model Questionnaire {
 }
 
 model Exercise {
-  id             Int      @id @default(autoincrement())
+  id             Int       @id @default(autoincrement())
   title_tr       String
   title_en       String?
   description_tr String?
@@ -83,9 +83,12 @@ model Exercise {
   duration       Int
   imagePath      String?
   difficulty     String?
-  isPremium      Boolean  @default(false)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  isPremium      Boolean   @default(false)
+  status         String    @default("published")
+  category       String?   @default("program")
+  publishedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
   progresses     Progress[]
 }
 
