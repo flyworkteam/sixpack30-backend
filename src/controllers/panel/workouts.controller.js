@@ -10,6 +10,11 @@ import {
   parsePagination,
   paginationMeta,
 } from '../../panel/utils.js';
+import {
+  isMultipartWorkoutRequest,
+  parseWorkoutFormBody,
+  uploadWorkoutMediaFiles,
+} from '../../services/panelMedia.service.js';
 
 function buildWorkoutWhere(query) {
   const where = {};
@@ -27,6 +32,33 @@ function buildWorkoutWhere(query) {
     ];
   }
   return where;
+}
+
+function rejectDirectCdnUrls(body, res) {
+  if (body.coverImageUrl || body.videoUrl || body.extras?.videoUrl) {
+    panelError(
+      res,
+      400,
+      'BAD_REQUEST',
+      'Kapak ve video BunnyCDN\'e panelden değil API üzerinden yüklenmelidir. multipart/form-data ile coverImage ve/veya video dosyası gönderin.'
+    );
+    return true;
+  }
+  return false;
+}
+
+async function applyMediaAndRespond(res, exercise, files, statusCode = 200) {
+  if (files && (files.coverImage?.length || files.video?.length)) {
+    const mediaPaths = await uploadWorkoutMediaFiles(files, exercise.id);
+    if (mediaPaths.imagePath || mediaPaths.videoPath) {
+      exercise = await prisma.exercise.update({
+        where: { id: exercise.id },
+        data: mediaPaths,
+      });
+    }
+  }
+
+  return res.status(statusCode).json(panelItemResponse(mapExerciseToPanelWorkout(exercise)));
 }
 
 export const listPanelWorkouts = async (req, res) => {
@@ -72,18 +104,31 @@ export const getPanelWorkout = async (req, res) => {
 };
 
 export const createPanelWorkout = async (req, res) => {
-  const { title } = req.body || {};
+  const body = parseWorkoutFormBody(req.body);
+
+  if (!isMultipartWorkoutRequest(req) && rejectDirectCdnUrls(body, res)) {
+    return;
+  }
+
+  const { title } = body;
   if (!title || typeof title !== 'string' || !title.trim()) {
     return panelError(res, 400, 'BAD_REQUEST', 'title alanı zorunludur.');
   }
 
   try {
-    const data = mapPanelWorkoutInputToExercise(req.body);
-    const exercise = await prisma.exercise.create({ data });
-    res.status(201).json(panelItemResponse(mapExerciseToPanelWorkout(exercise)));
+    const data = mapPanelWorkoutInputToExercise(body);
+    let exercise = await prisma.exercise.create({ data });
+    return await applyMediaAndRespond(res, exercise, req.files, 201);
   } catch (error) {
     console.error('[Panel] create workout error:', error);
-    res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Antrenman oluşturulamadı.' });
+    const message =
+      error.message?.includes('CDN') || error.message?.includes('Kapak') || error.message?.includes('Video')
+        ? error.message
+        : 'Antrenman oluşturulamadı.';
+    res.status(error.message?.includes('CDN') ? 503 : 500).json({
+      error: error.message?.includes('CDN') ? 'CDN_ERROR' : 'INTERNAL_ERROR',
+      message,
+    });
   }
 };
 
@@ -93,18 +138,31 @@ export const patchPanelWorkout = async (req, res) => {
     return panelError(res, 400, 'BAD_REQUEST', 'Geçersiz antrenman id.');
   }
 
+  const body = parseWorkoutFormBody(req.body);
+
+  if (!isMultipartWorkoutRequest(req) && rejectDirectCdnUrls(body, res)) {
+    return;
+  }
+
   try {
     const existing = await prisma.exercise.findUnique({ where: { id } });
     if (!existing) {
       return panelError(res, 404, 'NOT_FOUND', 'Antrenman bulunamadı.');
     }
 
-    const data = mapPanelWorkoutInputToExercise(req.body, existing);
-    const exercise = await prisma.exercise.update({ where: { id }, data });
-    res.status(200).json(panelItemResponse(mapExerciseToPanelWorkout(exercise)));
+    const data = mapPanelWorkoutInputToExercise(body, existing);
+    let exercise = await prisma.exercise.update({ where: { id }, data });
+    return await applyMediaAndRespond(res, exercise, req.files);
   } catch (error) {
     console.error('[Panel] patch workout error:', error);
-    res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Antrenman güncellenemedi.' });
+    const message =
+      error.message?.includes('CDN') || error.message?.includes('Kapak') || error.message?.includes('Video')
+        ? error.message
+        : 'Antrenman güncellenemedi.';
+    res.status(error.message?.includes('CDN') ? 503 : 500).json({
+      error: error.message?.includes('CDN') ? 'CDN_ERROR' : 'INTERNAL_ERROR',
+      message,
+    });
   }
 };
 

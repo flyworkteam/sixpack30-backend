@@ -88,6 +88,7 @@ export function mapExerciseToPanelWorkout(exercise) {
       isPremium: exercise.isPremium,
       programDay: exercise.id,
       durationSeconds: exercise.duration,
+      videoUrl: getCdnUrl(exercise.videoPath),
       locale: 'tr',
     },
   };
@@ -118,8 +119,12 @@ export function mapPanelWorkoutInputToExercise(body, existing = null) {
     duration: minutesToSeconds(durationMinutes) ?? existing?.duration ?? 600,
     difficulty:
       mapDifficultyFromPanel(body.difficulty) ?? existing?.difficulty ?? 'Orta',
-    imagePath: body.coverImageUrl ?? existing?.imagePath ?? null,
-    isPremium: body.extras?.isPremium ?? existing?.isPremium ?? false,
+    imagePath: existing?.imagePath ?? null,
+    videoPath: existing?.videoPath ?? null,
+    isPremium:
+      body.extras?.isPremium ??
+      (body.isPremium !== undefined ? Boolean(body.isPremium) : existing?.isPremium) ??
+      false,
     status,
     category: body.category ?? existing?.category ?? 'program',
     publishedAt,

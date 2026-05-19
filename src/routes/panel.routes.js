@@ -14,6 +14,7 @@ import {
   listPanelWorkouts,
   patchPanelWorkout,
 } from '../controllers/panel/workouts.controller.js';
+import { panelWorkoutUpload } from '../middlewares/panelUpload.middleware.js';
 import {
   getPanelUserWorkout,
   listPanelUserWorkouts,
@@ -34,9 +35,9 @@ router.get('/users/:id', getPanelUser);
 router.patch('/users/:id', patchPanelUser);
 
 router.get('/workouts', listPanelWorkouts);
-router.post('/workouts', createPanelWorkout);
+router.post('/workouts', panelWorkoutUpload, createPanelWorkout);
 router.get('/workouts/:id', getPanelWorkout);
-router.patch('/workouts/:id', patchPanelWorkout);
+router.patch('/workouts/:id', panelWorkoutUpload, patchPanelWorkout);
 router.delete('/workouts/:id', deletePanelWorkout);
 
 router.get('/user-workouts', listPanelUserWorkouts);

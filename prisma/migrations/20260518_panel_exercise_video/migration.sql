@@ -1,0 +1,1 @@
+ALTER TABLE `Exercise` ADD COLUMN `videoPath` VARCHAR(191) NULL;

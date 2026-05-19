@@ -82,6 +82,7 @@ model Exercise {
   description_en String?
   duration       Int
   imagePath      String?
+  videoPath      String?
   difficulty     String?
   isPremium      Boolean   @default(false)
   status         String    @default("published")

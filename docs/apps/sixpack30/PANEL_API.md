@@ -62,6 +62,9 @@ PANEL_SERVICE_NAME=sixpack30-api
 | `PANEL_TIMEZONE` | `Europe/Istanbul` | Analyse günlük serisi |
 | `PANEL_DAILY_DAYS` | `30` | 7–90 arası günlük analiz günü |
 | `PANEL_ALLOWED_IPS` | boş | Doluysa yalnızca listedeki IP’ler |
+| `CDN_ACCESS_KEY` | — | Bunny Storage AccessKey (panel kapak/video yükleme) |
+| `CDN_HOSTNAME` | `sixpack30.b-cdn.net` | Mobil ve panel CDN URL kökü |
+| `CDN_STORAGE_ZONE` | `sixpack30` | Bunny storage zone adı |
 
 Şema güncellemesi (ilk deploy):
 
@@ -235,30 +238,72 @@ Content-Type: application/json
 
 ### 6.4 Workouts (katalog = `Exercise` tablosu)
 
-**POST — yeni antrenman**
+#### Medya yükleme (önemli)
+
+Kapak görseli ve video **panelden BunnyCDN’e doğrudan yüklenmez**. Panel dosyaları API’ye gönderir; backend `CDN_ACCESS_KEY` ile Bunny Storage’a yükler ve dönen URL’leri kaydeder.
+
+| Dosya alanı | Tür | Max boyut | CDN path örneği |
+|-------------|-----|-----------|-----------------|
+| `coverImage` | jpeg, png, webp, gif | 10 MB | `exercises/{id}/cover_{ts}.jpg` |
+| `video` | mp4, webm, mov | 150 MB | `exercises/{id}/video_{ts}.mp4` |
+
+- `coverImageUrl` / `videoUrl` ile JSON gövdesi **kabul edilmez** (400).
+- Yanıtta `coverImageUrl` ve `extras.videoUrl` API’nin ürettiği CDN URL’leridir.
+
+**POST / PATCH — `multipart/form-data` (önerilen)**
 
 ```http
 POST {BASE}/workouts
+X-Panel-Api-Key: <key>
+Content-Type: multipart/form-data
 ```
+
+| Form alanı | Tip | Zorunlu | Açıklama |
+|------------|-----|---------|----------|
+| `title` | text | evet | Antrenman başlığı (TR) |
+| `description` | text | hayır | |
+| `status` | text | hayır | `draft` \| `published` \| `archived` |
+| `difficulty` | text | hayır | `beginner` \| `intermediate` \| `advanced` |
+| `durationMinutes` | text/number | hayır | Varsayılan 10 |
+| `category` | text | hayır | Varsayılan `program` |
+| `isPremium` | text | hayır | `true` / `false` |
+| `extras` | text (JSON string) | hayır | `{"title_en":"Morning Core"}` |
+| `coverImage` | file | hayır | Kapak — API Bunny’e yükler |
+| `video` | file | hayır | Video — API Bunny’e yükler |
+
+**curl örneği**
+
+```bash
+curl -X POST "$BASE/workouts" \
+  -H "X-Panel-Api-Key: $KEY" \
+  -F "title=Sabah Core" \
+  -F "description=10 dk karın aktivasyonu" \
+  -F "status=published" \
+  -F "difficulty=intermediate" \
+  -F "durationMinutes=10" \
+  -F 'extras={"title_en":"Morning Core","isPremium":false}' \
+  -F "coverImage=@./cover.jpg;type=image/jpeg" \
+  -F "video=@./workout.mp4;type=video/mp4"
+```
+
+**Yanıt örneği**
 
 ```json
 {
-  "title": "Sabah Core",
-  "description": "10 dk karın aktivasyonu",
-  "status": "published",
-  "difficulty": "intermediate",
-  "durationMinutes": 10,
-  "category": "program",
-  "coverImageUrl": "https://sixpack30.b-cdn.net/exercises/day_1.jpg",
-  "extras": {
-    "title_en": "Morning Core",
-    "isPremium": false,
-    "locale": "tr"
+  "contractVersion": "2",
+  "data": {
+    "id": "31",
+    "title": "Sabah Core",
+    "coverImageUrl": "https://sixpack30.b-cdn.net/exercises/31/cover_1716028800000.jpg",
+    "extras": {
+      "videoUrl": "https://sixpack30.b-cdn.net/exercises/31/video_1716028800001.mp4",
+      "title_en": "Morning Core"
+    }
   }
 }
 ```
 
-Yanıt: `{ "contractVersion": "2", "data": PanelWorkout }`
+**PATCH** — yalnızca yeni dosya gönderilen alanlar güncellenir; metin alanları aynı formatta.
 
 **DELETE** → kayıt silinmez; `status: "archived"` olur.
 
@@ -333,7 +378,8 @@ GET {BASE}/user-workouts?userId=42&status=completed&from=2026-05-01&to=2026-05-1
 | `difficulty` | `Exercise.difficulty` → `beginner` \| `intermediate` \| `advanced` |
 | `durationMinutes` | `Exercise.duration` ÷ 60 (DB **saniye**) |
 | `category` | `Exercise.category` (varsayılan `program`) |
-| `coverImageUrl` | CDN ile `Exercise.imagePath` |
+| `coverImageUrl` | `getCdnUrl(Exercise.imagePath)` — panel dosya yükler, API yazar |
+| `extras.videoUrl` | `getCdnUrl(Exercise.videoPath)` — panel dosya yükler, API yazar |
 | `publishedAt` | `Exercise.publishedAt` |
 | `extras.title_en` | `Exercise.title_en` |
 | `extras.isPremium` | `Exercise.isPremium` |
@@ -393,6 +439,15 @@ Tüm “bugün” hesapları `PANEL_TIMEZONE` (varsayılan `Europe/Istanbul`) ta
 
 **Süre:** Panel `durationMinutes` gönderir; DB’de saniye saklanır (`× 60`).
 
+**Medya akışı (panel UI):**
+
+1. Kullanıcı formda kapak/video dosyası seçer.
+2. Panel `multipart/form-data` ile `POST /workouts` veya `PATCH /workouts/:id` çağırır.
+3. Backend önce kaydı oluşturur/günceller, ardından dosyaları Bunny’e yükler, `imagePath` / `videoPath` günceller.
+4. Panel yanıttaki `coverImageUrl` ve `extras.videoUrl` ile önizleme gösterir.
+
+Panel **Bunny Storage API key’ine sahip olmamalı**; yalnızca `X-Panel-Api-Key` yeterlidir.
+
 ---
 
 ## 10. Üyelik / gelir
@@ -432,9 +487,12 @@ curl -s -H "X-Panel-Api-Key: $KEY" "$BASE/workouts?status=published" | jq
 # 5 User workouts
 curl -s -H "X-Panel-Api-Key: $KEY" "$BASE/users/1/workouts" | jq
 
-# 6 POST workout (admin)
-curl -s -X POST -H "X-Panel-Api-Key: $KEY" -H "Content-Type: application/json" \
-  -d '{"title":"Test Antrenman","durationMinutes":10,"status":"draft"}' \
+# 6 POST workout + medya (admin)
+curl -s -X POST -H "X-Panel-Api-Key: $KEY" \
+  -F "title=Test Antrenman" \
+  -F "durationMinutes=10" \
+  -F "status=draft" \
+  -F "coverImage=@./cover.jpg;type=image/jpeg" \
   "$BASE/workouts" | jq
 ```
 
