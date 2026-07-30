@@ -1,6 +1,9 @@
 export const getLang = (req) => {
-  const lang = req.headers['accept-language'] || 'tr';
-  return lang.toLowerCase().startsWith('en') ? 'en' : 'tr';
+  const raw = (req.headers['accept-language'] || 'tr').toLowerCase();
+  // Şimdilik DB'de yalnızca title_tr / title_en var.
+  // Türkçe dışındaki tüm diller İngilizceye düşer.
+  if (raw.startsWith('tr')) return 'tr';
+  return 'en';
 };
 
 export const localizeExercise = (exercise, lang, gender) => {
@@ -14,10 +17,16 @@ export const localizeExercise = (exercise, lang, gender) => {
     }
   }
 
+  const useEnglish = lang !== 'tr';
+
   return {
     ...exercise,
-    title: lang === 'en' ? (exercise.title_en || exercise.title_tr) : exercise.title_tr,
-    description: lang === 'en' ? (exercise.description_en || exercise.description_tr) : exercise.description_tr,
+    title: useEnglish
+      ? (exercise.title_en || exercise.title_tr)
+      : exercise.title_tr,
+    description: useEnglish
+      ? (exercise.description_en || exercise.description_tr)
+      : exercise.description_tr,
     imagePath: imagePath
   };
 };

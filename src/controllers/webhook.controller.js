@@ -1,25 +1,66 @@
 import prisma from '../config/database.js';
-import { createNotification } from '../services/notification.service.js';
+import { createNotification, NOTIFICATION_KEYS } from '../services/notification.service.js';
+
+const PREMIUM_STARTED_EVENTS = new Set([
+  'INITIAL_PURCHASE',
+  'RENEWAL',
+  'UNCANCELLATION',
+  'NON_RENEWING_PURCHASE',
+]);
+
+// CANCELLATION yalnızca otomatik yenilemenin kapatıldığı anlamına gelir.
+// Kullanıcının erişimi EXPIRATION olayına kadar devam eder.
+const NO_STATUS_CHANGE_EVENTS = new Set([
+  'CANCELLATION',
+  'BILLING_ISSUE',
+  'PRODUCT_CHANGE',
+  'SUBSCRIBER_ALIAS',
+  'TRANSFER',
+]);
+
+const isAuthorized = (authorization) => {
+  const expected = process.env.REVENUECAT_WEBHOOK_AUTH_TOKEN;
+  if (!expected || !authorization) return false;
+  return authorization === expected || authorization === `Bearer ${expected}`;
+};
 
 /**
  * RevenueCat Webhook Handler
  * @route POST /api/webhooks/revenuecat
  */
 export const handleRevenueCatWebhook = async (req, res) => {
-  const { event } = req.body;
+  if (!process.env.REVENUECAT_WEBHOOK_AUTH_TOKEN) {
+    console.error('[RevenueCat] REVENUECAT_WEBHOOK_AUTH_TOKEN tanımlı değil.');
+    return res.status(503).json({ error: 'Webhook yapılandırılmamış.' });
+  }
 
-  const authToken = req.headers['authorization'];
-  if (authToken !== process.env.REVENUECAT_WEBHOOK_AUTH_TOKEN) {
+  if (!isAuthorized(req.headers.authorization)) {
     return res.status(401).json({ error: 'Yetkisiz webhook isteği.' });
   }
 
-  if (!event) {
+  const { event } = req.body ?? {};
+  if (!event?.type || !event?.app_user_id) {
     return res.status(400).json({ error: 'Geçersiz webhook verisi.' });
   }
 
   const { type, app_user_id } = event;
 
   try {
+    if (NO_STATUS_CHANGE_EVENTS.has(type)) {
+      console.log(`[RevenueCat] ${type}: premium durumu değişmedi (${app_user_id}).`);
+      return res.status(200).json({ message: 'Olay işlendi; premium durumu değişmedi.' });
+    }
+
+    let isPremium;
+    if (PREMIUM_STARTED_EVENTS.has(type)) {
+      isPremium = true;
+    } else if (type === 'EXPIRATION') {
+      isPremium = false;
+    } else {
+      console.log(`[RevenueCat] Desteklenmeyen olay yok sayıldı: ${type}`);
+      return res.status(200).json({ message: 'Olay alındı; işlem gerektirmiyor.' });
+    }
+
     const user = await prisma.user.findUnique({
       where: { firebaseUid: app_user_id },
     });
@@ -29,25 +70,11 @@ export const handleRevenueCatWebhook = async (req, res) => {
       return res.status(200).json({ message: 'Kullanıcı sistemde yok ama bildirim alındı.' });
     }
 
-    let isPremium = false;
-
-    switch (type) {
-      case 'INITIAL_PURCHASE':
-      case 'RENEWAL':
-      case 'UNCANCELLATION':
-        isPremium = true;
-        console.log(`[RevenueCat] Premium Aktif: ${app_user_id}`);
-        break;
-      
-      case 'EXPIRATION':
-      case 'CANCELLATION':
-      case 'BILLING_ERROR':
-        isPremium = false;
-        console.log(`[RevenueCat] Premium Sona Erdi: ${app_user_id}`);
-        break;
-
-      default:
-        return res.status(200).json({ message: 'Olay işlendi (durum değişmedi).' });
+    // RevenueCat aynı webhook'u tekrar gönderebilir. Durum zaten aynıysa
+    // bildirim üretmeden 200 dönerek işlemi idempotent tut.
+    if (user.isPremium === isPremium) {
+      console.log(`[RevenueCat] ${type}: durum zaten güncel (${app_user_id}).`);
+      return res.status(200).json({ message: 'Premium durumu zaten güncel.' });
     }
 
     await prisma.user.update({
@@ -56,24 +83,18 @@ export const handleRevenueCatWebhook = async (req, res) => {
     });
 
     if (isPremium) {
-      await createNotification(
-        user.id,
-        'Premium Üyelik Aktif! 💎',
-        'SixPack30 Premium dünyasına hoş geldin! Tüm antrenmanlar artık parmaklarının ucunda.',
-        'success'
-      );
-    } else if (type === 'EXPIRATION' || type === 'CANCELLATION') {
-      await createNotification(
-        user.id,
-        'Abonelik Sona Erdi',
-        'Premium üyeliğin sona erdi. Hedeflerinden uzaklaşmamak için tekrar abone olabilirsin.',
-        'alert'
-      );
+      await createNotification(user.id, NOTIFICATION_KEYS.PREMIUM_ACTIVE, 'success');
+    } else {
+      await createNotification(user.id, NOTIFICATION_KEYS.SUBSCRIPTION_ENDED, 'alert');
     }
 
-    res.status(200).json({ message: 'Kullanıcı premium durumu güncellendi.' });
+    console.log(`[RevenueCat] ${app_user_id}: premium=${isPremium} (${type}).`);
+    return res.status(200).json({
+      message: 'Kullanıcı premium durumu güncellendi.',
+      isPremium,
+    });
   } catch (error) {
     console.error('[RevenueCat Webhook Hatası]:', error);
-    res.status(500).json({ error: 'Webhook işlenirken hata oluştu.' });
+    return res.status(500).json({ error: 'Webhook işlenirken hata oluştu.' });
   }
 };

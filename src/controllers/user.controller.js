@@ -1,5 +1,5 @@
 import prisma from '../config/database.js';
-import { createNotification } from '../services/notification.service.js';
+import { createNotification, NOTIFICATION_KEYS } from '../services/notification.service.js';
 import { getCdnUrl } from '../utils/cdn.js';
 import { getLang, localizeExercise } from '../utils/lang.js';
 
@@ -145,12 +145,7 @@ export const updateProfile = async (req, res) => {
           },
         });
 
-        await createNotification(
-          user.id,
-          'Artık Hazırsın! 🚀',
-          'Bilgilerin başarıyla alındı. 30 günlük karın kası yolculuğuna başlamaya hazırsın!',
-          'success'
-        );
+        await createNotification(user.id, NOTIFICATION_KEYS.READY, 'success');
       }
     }
 
@@ -416,33 +411,5 @@ export const deleteProfile = async (req, res) => {
   } catch (error) {
     console.error('Delete profile error:', error);
     res.status(500).json({ error: 'Profil silinemedi.' });
-  }
-};
-
-
-export const updatePremiumStatus = async (req, res) => {
-  if (!req.user) return res.status(401).json({ error: 'Yetkisiz erişim' });
-
-  const { isPremium } = req.body;
-
-  try {
-    const user = await prisma.user.findUnique({
-      where: { firebaseUid: req.user.uid }
-    });
-
-    if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
-
-    const updatedUser = await prisma.user.update({
-      where: { id: user.id },
-      data: { isPremium: !!isPremium }
-    });
-
-    res.status(200).json({
-      message: 'Premium durumu güncellendi.',
-      isPremium: updatedUser.isPremium
-    });
-  } catch (error) {
-    console.error('Premium update error:', error);
-    res.status(500).json({ error: 'Premium durumu güncellenemedi.' });
   }
 };

@@ -40,6 +40,9 @@ model CompletedDay {
 model Notification {
   id        Int      @id @default(autoincrement())
   userId    Int
+  // İstemcinin metni kendi dilinde üretmesi için kullanılan çeviri anahtarı.
+  // Eski kayıtlarda boş; o durumda title/body doğrudan gösterilir.
+  key       String?
   title     String
   body      String
   type      String?
